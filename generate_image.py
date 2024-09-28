@@ -136,6 +136,7 @@ def generate_images(
             iname = os.path.basename(ipath).replace('.jpg', '.png')
             print(f'Prcessing: {iname}')
             image = read_image(ipath)
+            image = resize_image(image, resolution) # resize the input image to the target resolution
             image = (torch.from_numpy(image).float().to(device) / 127.5 - 1).unsqueeze(0)
 
             if mpath is not None:
@@ -151,6 +152,9 @@ def generate_images(
             output = output[0].cpu().numpy()
             PIL.Image.fromarray(output, 'RGB').save(f'{outdir}/{iname}')
 
+def resize_image(image, resolution):
+    image = F.interpolate(image, size=(resolution, resolution), mode='bilinear', align_corners=False)
+    return image
 
 if __name__ == "__main__":
     generate_images() # pylint: disable=no-value-for-parameter
