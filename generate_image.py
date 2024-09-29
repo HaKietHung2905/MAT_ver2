@@ -21,10 +21,12 @@ import numpy as np
 import PIL.Image
 import torch
 import torch.nn.functional as F
+import tensorflow as tf
 
 import legacy
 from datasets.mask_generator_512 import RandomMask
 from networks.mat import Generator
+from tensorflow.keras.preprocessing.image import load_img, img_to_array, save_img
 
 
 def num_range(s: str) -> List[int]:
@@ -109,10 +111,23 @@ def generate_images(
 
     def read_image(image_path):
         with open(image_path, 'rb') as f:
-            if pyspng is not None and image_path.endswith('.png'):
-                image = pyspng.load(f.read())
-            else:
-                image = np.array(PIL.Image.open(f))
+            print(image_path)
+            img = load_img(image_path, target_size=(512, 512))
+             # Convert the image to array (optional step if further processing is needed)
+            img_array = img_to_array(img)
+            dir_name, file_name = os.path.split(image_path)
+            output_image_path = dpath.replace('images', 'resize_images/') + file_name
+            
+            # Save the resized image to the output folder
+            save_img(output_image_path, img_array)
+            image_path = output_image_path
+            print(image_path)
+            with open(image_path, 'rb') as f:
+              if pyspng is not None and image_path.endswith('.png'):
+                  image = pyspng.load(f.read())
+              else:
+                  image = np.array(PIL.Image.open(f))
+        
         if image.ndim == 2:
             image = image[:, :, np.newaxis] # HW => HWC
             image = np.repeat(image, 3, axis=2)
@@ -136,7 +151,7 @@ def generate_images(
             iname = os.path.basename(ipath).replace('.jpg', '.png')
             print(f'Prcessing: {iname}')
             image = read_image(ipath)
-            image = resize_image(image, resolution) # resize the input image to the target resolution
+            #image = resize_image(image, resolution) # resize the input image to the target resolution
             image = (torch.from_numpy(image).float().to(device) / 127.5 - 1).unsqueeze(0)
 
             if mpath is not None:
@@ -153,8 +168,29 @@ def generate_images(
             PIL.Image.fromarray(output, 'RGB').save(f'{outdir}/{iname}')
 
 def resize_image(image, resolution):
-    image = F.interpolate(image, size=(resolution, resolution), mode='bilinear', align_corners=False)
-    return image
+    """
+    Resizes an image to the specified resolution using bilinear interpolation.
+
+    Args:
+        image (np.ndarray or tf.Tensor): Input image (H, W, C) as a NumPy array or Tensor.
+        resolution (int): Desired height and width.
+
+    Returns:
+        np.ndarray or tf.Tensor: Resized image.
+    """
+    # If the input is a NumPy array, convert it to a TensorFlow tensor
+    if isinstance(image, np.ndarray):
+        image_tensor = tf.convert_to_tensor(image, dtype=tf.float32)
+    else:
+        image_tensor = image
+
+    # Resize the image to the specified resolution (height, width)
+    resized_image = tf.image.resize(image_tensor, (resolution, resolution), method='bilinear')
+
+    # If the original input was a NumPy array, return a NumPy array
+    if isinstance(image, np.ndarray):
+        return resized_image.numpy()
+    return resized_image
 
 if __name__ == "__main__":
     generate_images() # pylint: disable=no-value-for-parameter
